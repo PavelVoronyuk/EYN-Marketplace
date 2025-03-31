@@ -18,7 +18,7 @@ class BaseModel(Model):
 class Users(BaseModel):
     UserId = AutoField(primary_key=True)
     Username = CharField(null=False, max_length=50)
-    Email = CharField(unique=True, null=False, max_length=50)
+    Email = CharField(unique=True, null=False)
     Password = CharField(null=False, max_length=50)
 
 

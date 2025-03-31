@@ -1,6 +1,7 @@
 from flask import Blueprint
-from flask_restx import Resource, Namespace, fields
+from flask_restx import Resource, Namespace, fields, inputs
 from flask_restx.reqparse import RequestParser
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Product, Users
 
 products = Blueprint("product", __name__)
@@ -22,14 +23,14 @@ put_product_parser.add_argument("product_id", type=int, required=True, location=
 put_product_parser.add_argument("product_name", type=str, required=True, location="args")
 put_product_parser.add_argument("product_desc", type=str, required=True, location="args")
 put_product_parser.add_argument("product_price", type=int, required=True, location="args")
-put_product_parser.add_argument("is_available", type=lambda x: x.lower() in ("true", 1), required=True, location="args", choices=(True, False))
+put_product_parser.add_argument("is_available", type=inputs.boolean, required=True, location="args", choices=(True, False))
 
 patch_product_parser = RequestParser()
 patch_product_parser.add_argument("product_id", type=int, required=True, location="args")
 patch_product_parser.add_argument("product_name", type=str, required=False, location="args")
 patch_product_parser.add_argument("product_desc", type=str, required=False, location="args")
 patch_product_parser.add_argument("product_price", type=int, required=False, location="args")
-patch_product_parser.add_argument("is_available", type=lambda x: x.lower() in ("true", 1), required=False, location="args", choices=(True, False))
+patch_product_parser.add_argument("is_available", type=inputs.boolean, required=False, location="args", choices=(True, False))
 
 
 get_product_model = ns_products.model("Product", {
@@ -55,38 +56,43 @@ class ProductsView(Resource):
         return product
 
     @ns_products.expect(post_product_parser)
+    @jwt_required()
     def post(self):
         args = post_product_parser.parse_args()
 
         try:
-            new_product: Product
-            new_product = Product.create(ProductName=args["product_name"],
-                                        ProductDescription=args["product_desc"],
-                                            ProductPrice=args["product_price"],
-                                            Owner=1,
-                                            IsAvailable=args["is_available"])
-            return True
+            user: Users
+            user = Users.get_or_none(Users.Email==get_jwt_identity())
+            Product.create(ProductName=args["product_name"],
+                            ProductDescription=args["product_desc"],
+                            ProductPrice=args["product_price"],
+                            Owner=user.UserId,
+                            IsAvailable=args["is_available"])
+            return "Success", 200
         except Exception as e:
-            return e, 400
+            return str(e), 400
 
     @ns_products.expect(put_product_parser)
+    @jwt_required()
     def put(self):
         args = put_product_parser.parse_args()
 
         try:
             product: Product
-            if Product.get_or_none(Product.ProductId == args["product_id"]):
+            product = Product.get_or_none(Product.ProductId == args["product_id"])
+            if product and product.Owner == Users.get_or_none(Users.Email==get_jwt_identity()):
                 Product.update(ProductName=args["product_name"],
                                                 ProductDescription=args["product_desc"],
                                                 ProductPrice=args["product_price"],
                                                 IsAvailable=args["is_available"]).where(Product.ProductId == args["product_id"]).execute()
-                return True
+                return "Success", 200
             else:
-                return False
+                return "You are not the owner or product does not exist!", 400
         except Exception as e:
-            return e, 400
+            return str(e), 400
 
     @ns_products.expect(patch_product_parser)
+    @jwt_required()
     def patch(self):
         args = patch_product_parser.parse_args()
         field_mapping = {
@@ -98,17 +104,18 @@ class ProductsView(Resource):
         try:
             product: Product
             product = Product.get_or_none(Product.ProductId == args["product_id"])
-            updated_fields = {field_mapping[key]: value for key, value in args.items() if value is not None and key in field_mapping}
-            for key, value in updated_fields.items():
-                if key != "IsAvailable":
+            if product and product.Owner == Users.get_or_none(Users.Email==get_jwt_identity()):
+                updated_fields = {field_mapping[key]: value for key, value in args.items() if value is not None and key in field_mapping}
+                for key, value in updated_fields.items():
                     setattr(product, key, value)
-                else:
-                    setattr(product, key, bool(value))
 
-            product.save()
-            return True
+                product.save()
+                return "Success", 200
+            else:
+                return "You are not the owner or product does not exist!", 400
+
         except Exception as e:
-            return e, 400
+            return str(e), 400
 
     @ns_products.expect(get_delete_product_parser)
     def delete(self):
@@ -119,4 +126,4 @@ class ProductsView(Resource):
             product.delete_instance()
             return True
         except Exception as e:
-            return e, 400
+            return str(e), 400
