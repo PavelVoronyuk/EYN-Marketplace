@@ -19,7 +19,8 @@ class Users(BaseModel):
     UserId = AutoField(primary_key=True)
     Username = CharField(null=False, max_length=50)
     Email = CharField(unique=True, null=False)
-    Password = CharField(null=False, max_length=50)
+    Password = CharField(null=False)
+    Role = CharField(choices=[("user", "User"), ("admin", "Admin")], default="user", null=False)
 
 
 class Product(BaseModel):
@@ -27,7 +28,7 @@ class Product(BaseModel):
     ProductName = CharField(null=False, max_length=100)
     ProductDescription = CharField(null=False, max_length=750)
     ProductPrice = IntegerField(null=False)
-    Owner = ForeignKeyField(Users, object_id_name="UserId", column_name="UserId")
+    Owner = ForeignKeyField(Users, object_id_name="UserId", column_name="UserId", on_delete="CASCADE")
     IsAvailable = BooleanField(default=False)
 
     def clean(self):
@@ -41,6 +42,7 @@ class Product(BaseModel):
         product.save()
         return product
 
-# db.connect()
-# db.create_tables([Users, Product])
-# db.close()
+
+db.connect()
+db.create_tables([Users, Product])
+db.close()

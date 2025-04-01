@@ -6,6 +6,7 @@ from flask_jwt_extended import (create_access_token, create_refresh_token, get_j
                                  set_refresh_cookies)
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import Users
+from extensions import limiter
 
 
 auth = Blueprint("auth", __name__)
@@ -24,6 +25,12 @@ login_post = RequestParser()
 login_post.add_argument("email", type=str, required=True, location="args")
 login_post.add_argument("psw", type=str, required=True, location="args")
 
+delete_acc = RequestParser()
+delete_acc.add_argument("psw", type=str, required=True, location="args")
+
+admin_delete_acc = RequestParser()
+admin_delete_acc.add_argument("user_id", type=int, required=True, location="args")
+
 get_profile_model = ns_auth.model("user", {
     "name": fields.String(attribute="Username"),
     "email": fields.String(attribute="Email")
@@ -32,10 +39,13 @@ get_profile_model = ns_auth.model("user", {
 
 @ns_auth.route("/register")
 class Register(Resource):
+    @jwt_required(optional=True)
     @ns_auth.expect(register_post)
     def post(self):
         args = register_post.parse_args()
 
+        if get_jwt_identity():
+            return "Already logged in!", 400
 
         try:
             if Users.get_or_none(Users.Email == args["email"]) is not None:
@@ -53,7 +63,7 @@ class Register(Resource):
 @ns_auth.route("/login")
 class Login(Resource):
     @ns_auth.expect(login_post)
-    @jwt_required(optional=True, locations=["cookies"])
+    @jwt_required(optional=True)
     @limiter.limit("5 per minute")
     def post(self):
         args = login_post.parse_args()
@@ -119,3 +129,46 @@ class Refresh(Resource):
         response = make_response("Token refreshed", 200)
         set_access_cookies(response, new_access_token)
         return response
+
+@ns_auth.route("/delete-account")
+class DelAccount(Resource):
+    @jwt_required()
+    @ns_auth.expect(delete_acc)
+    def delete(self):
+        args = delete_acc.parse_args()
+        psw = args["psw"]
+
+        user: Users
+        user = Users.get_or_none(Users.Email == get_jwt_identity())
+        try:
+            if check_password_hash(user.Password, psw):
+                response = make_response("Success", 200)
+                unset_jwt_cookies(response)
+                user.delete_instance()
+                return response
+            else:
+                return "Wrong password!", 400
+        except Exception as e:
+            return str(e), 400
+
+@ns_auth.route("/admin-delete-account")
+class AdminDelAccount(Resource):
+    @jwt_required()
+    @ns_auth.expect(admin_delete_acc)
+    def delete(self):
+        args = admin_delete_acc.parse_args()
+        user_id = args["user_id"]
+
+        admin: Users
+        admin = Users.get_or_none(Users.Email == get_jwt_identity())
+        try:
+            if admin.Role.lower() == "admin":
+                user = Users.get_or_none(Users.UserId == user_id)
+                user.delete_instance()
+                response = make_response("Success", 200)
+                unset_jwt_cookies(response)
+                return response
+            else:
+                return "You can't do that.", 400
+        except Exception as e:
+            return str(e), 400

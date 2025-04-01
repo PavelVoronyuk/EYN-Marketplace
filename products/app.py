@@ -78,9 +78,11 @@ class ProductsView(Resource):
         args = put_product_parser.parse_args()
 
         try:
+            user: Users
             product: Product
             product = Product.get_or_none(Product.ProductId == args["product_id"])
-            if product and product.Owner == Users.get_or_none(Users.Email==get_jwt_identity()):
+            user = Users.get_or_none(Users.Email==get_jwt_identity())
+            if product and product.Owner == user or user.Role.lower() == "admin":
                 Product.update(ProductName=args["product_name"],
                                                 ProductDescription=args["product_desc"],
                                                 ProductPrice=args["product_price"],
@@ -102,9 +104,11 @@ class ProductsView(Resource):
             "is_available": "IsAvailable",
         }
         try:
+            user: Users
             product: Product
             product = Product.get_or_none(Product.ProductId == args["product_id"])
-            if product and product.Owner == Users.get_or_none(Users.Email==get_jwt_identity()):
+            user = Users.get_or_none(Users.Email==get_jwt_identity())
+            if product and product.Owner == user or user.Role.lower() == "admin":
                 updated_fields = {field_mapping[key]: value for key, value in args.items() if value is not None and key in field_mapping}
                 for key, value in updated_fields.items():
                     setattr(product, key, value)
@@ -118,12 +122,19 @@ class ProductsView(Resource):
             return str(e), 400
 
     @ns_products.expect(get_delete_product_parser)
+    @jwt_required()
     def delete(self):
         product_id = get_delete_product_parser.parse_args()["product_id"]
 
         try:
+            user: Users
+            product: Product
             product = Product.get_or_none(Product.ProductId == product_id)
-            product.delete_instance()
-            return True
+            user = Users.get_or_none(Users.Email==get_jwt_identity())
+            if product and product.Owner == user or user.Role.lower() == "admin":
+                product.delete_instance()
+                return "Success", 200
+            else:
+                return "You are not the owner or product does not exist!", 400
         except Exception as e:
             return str(e), 400
