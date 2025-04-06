@@ -1,4 +1,4 @@
-from flask import Blueprint, make_response, request
+from flask import Blueprint, make_response, request, url_for
 from flask_restx import Resource, Namespace, fields
 from flask_restx.reqparse import RequestParser
 from flask_jwt_extended import (create_access_token, create_refresh_token, get_jwt_identity,
@@ -6,7 +6,10 @@ from flask_jwt_extended import (create_access_token, create_refresh_token, get_j
                                  set_refresh_cookies)
 from werkzeug.security import generate_password_hash, check_password_hash
 from models import Users
-from extensions import limiter
+from extensions import limiter, mail
+import secrets
+from flask_mail import Message
+from datetime import datetime, timedelta
 
 
 auth = Blueprint("auth", __name__)
@@ -30,6 +33,13 @@ delete_acc.add_argument("psw", type=str, required=True, location="args")
 
 admin_delete_acc = RequestParser()
 admin_delete_acc.add_argument("user_id", type=int, required=True, location="args")
+
+post_forgot_psw = RequestParser()
+post_forgot_psw.add_argument("email", type=str, required=True, location="args")
+
+post_reset_psw = RequestParser()
+post_reset_psw.add_argument("psw", type=str, required=True, location="args")
+
 
 get_profile_model = ns_auth.model("user", {
     "name": fields.String(attribute="Username"),
@@ -170,5 +180,48 @@ class AdminDelAccount(Resource):
                 return response
             else:
                 return "You can't do that.", 400
+        except Exception as e:
+            return str(e), 400
+
+@ns_auth.route("/forgot-password")
+class ForgotPassword(Resource):
+    @ns_auth.expect(post_forgot_psw)
+    def post(self):
+        email = post_forgot_psw.parse_args()["email"]
+        user: Users = Users.get_or_none(Users.Email == email)
+
+        if not user:
+            return "User not found", 400
+        try:
+            reset_token = secrets.token_urlsafe(32)
+            user.Reset_token = reset_token
+            user.Reset_token_expiry = datetime.now() + timedelta(hours=1)
+            user.save()
+
+            reset_url = url_for("auth_reset_password", token=reset_token, _external=True)
+            msg = Message("Password reset", sender="workprofi33@gmail.com", recipients=[email],
+                        body=f"Click here to reset your password: {reset_url}")
+            mail.send(msg)
+
+            return "Password reset email sent.", 200
+        except Exception as e:
+            return str(e), 400
+
+@ns_auth.route("/reset-password/<string:token>")
+class ResetPassword(Resource):
+    @ns_auth.expect(post_reset_psw)
+    def post(self, token):
+        user: Users = Users.get_or_none(Users.Reset_token == token)
+        if not user or user.Reset_token_expiry < datetime.now():
+            return "Invalid or expired token.", 400
+
+        try:
+            new_psw = post_reset_psw.parse_args()["psw"]
+            user.Password = generate_password_hash(new_psw)
+            user.Reset_token = None
+            user.Reset_token_expiry = None
+            user.save()
+
+            return "Successfully changed password.", 200
         except Exception as e:
             return str(e), 400

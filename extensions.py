@@ -1,4 +1,6 @@
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_mail import Mail
 
-limiter = Limiter(get_remote_address, default_limits=["5 per minute",])
+mail = Mail()
+limiter = Limiter(get_remote_address)

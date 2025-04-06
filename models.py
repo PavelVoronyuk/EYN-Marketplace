@@ -1,11 +1,15 @@
 from peewee import (Model, AutoField, CharField, BooleanField,
-                     IntegerField, ForeignKeyField, PostgresqlDatabase)
+                     IntegerField, ForeignKeyField, PostgresqlDatabase,
+                     DateTimeField)
+from os import getenv
+from dotenv import load_dotenv
 
+load_dotenv()
 
 db = PostgresqlDatabase(
-    "eyn_database",
-    user="eyn",
-    password="Password",
+    getenv("DB_NAME"),
+    user=getenv("DB_USER"),
+    password=getenv("DB_PASSWORD"),
     host="localhost",
     port=5432
 )
@@ -21,6 +25,8 @@ class Users(BaseModel):
     Email = CharField(unique=True, null=False)
     Password = CharField(null=False)
     Role = CharField(choices=[("user", "User"), ("admin", "Admin")], default="user", null=False)
+    Reset_token = CharField(null=True, default=None)
+    Reset_token_expiry = DateTimeField(null=True, default=None)
 
 
 class Product(BaseModel):
@@ -43,6 +49,6 @@ class Product(BaseModel):
         return product
 
 
-db.connect()
-db.create_tables([Users, Product])
-db.close()
+# db.connect()
+# db.create_tables([Users, Product])
+# db.close()
