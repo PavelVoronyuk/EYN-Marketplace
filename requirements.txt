@@ -1,0 +1,8 @@
+flask
+flask-restx
+flask-jwt-extended
+flask-mail
+flask-limiter
+python-dotenv
+peewee
+psycopg2-binary
