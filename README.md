@@ -23,9 +23,9 @@ Flask-based RESTful API for user authentication and product management using JWT
 - peewee
 ## 📦 Installation
 
-```bash
-git clone https://github.com/yourusername/flask-product-api.git
-cd flask-product-api
+
+git clone https://github.com/PavelVoronyuk/Marketplace-API.git
+cd Marketplace-API
 python -m venv venv
 source venv/bin/activate  # On Windows: . Venv/Scripts/activate
 
